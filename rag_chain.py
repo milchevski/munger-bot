@@ -10,7 +10,7 @@ Composes a retrieval-augmented generation chain using:
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -58,7 +58,7 @@ def build_rag_chain(vectorstore: InMemoryVectorStore):
     Returns:
         A runnable chain that accepts {"question": str} and returns a string.
     """
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", _SYSTEM_PROMPT),
@@ -66,9 +66,16 @@ def build_rag_chain(vectorstore: InMemoryVectorStore):
     ])
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite",
+        model="gemini-2.5-flash",
         temperature=0.7,
+        max_retries=0,
     )
+
+    def _print_prompt(p):
+        print("\n" + "="*40 + " PROMPT TO LLM " + "="*40)
+        print(p.to_string() if hasattr(p, 'to_string') else p)
+        print("="*95 + "\n")
+        return p
 
     chain = (
         {
@@ -76,6 +83,7 @@ def build_rag_chain(vectorstore: InMemoryVectorStore):
             "question": RunnablePassthrough(),
         }
         | prompt
+        | RunnableLambda(_print_prompt)
         | llm
         | StrOutputParser()
     )
